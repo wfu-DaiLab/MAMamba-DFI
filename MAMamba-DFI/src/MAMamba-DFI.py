@@ -22,7 +22,7 @@ This repo is modified basing on Edge-Connect
 https://github.com/knazeri/edge-connect
 '''
 
-class HINT():
+class MAMamba-DFI():
     def __init__(self, config):
         self.config = config
 
@@ -136,7 +136,7 @@ class HINT():
                                    'perceptual loss': gen_content_loss, 'gen_gan_loss': gen_gan_loss,
                                    'dis_loss': dis_loss}, step=iteration)
 
-                ###################### visialization
+                
                 if iteration % 40 == 0:
                     create_dir(self.results_path)
                     inputs = (images * (1 - masks))
@@ -169,7 +169,7 @@ class HINT():
 
                     print(name + ' complete!')
                     
-                ##############
+                
 
                 # log model at checkpoints
                 if self.config.LOG_INTERVAL and iteration % self.config.LOG_INTERVAL == 0:
