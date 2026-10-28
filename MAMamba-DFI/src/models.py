@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
-from .networks import HINT, Discriminator
+from .networks import MAMamba-DFI, Discriminator
 from .loss import AdversarialLoss, PerceptualLoss, StyleLoss, FocalFrequencyLoss
 
 
@@ -45,8 +45,7 @@ class BaseModel(nn.Module):
     def save(self):
         print('\nsaving %s...\n' % self.name)
 
-        # --- 1. 保存“最新版” (Latest) ---
-        # 这个文件会被不断覆盖，永远保持最新，用于断点续训
+
         torch.save({
             'iteration': self.iteration,
             'generator': self.generator.state_dict()
@@ -56,9 +55,7 @@ class BaseModel(nn.Module):
             'discriminator': self.discriminator.state_dict()
         }, self.dis_weights_path)
 
-        # --- 2. 保存“历史备份” (History) ---
-        # 策略：每 10,000 步 (约 1 Epoch) 另存一份，绝不覆盖
-        # 这样你最后会有 gen_10000.pth, gen_20000.pth ... gen_300000.pth
+
         if self.iteration % 760 == 0:
             # 构造带步数的文件名
             gen_filename = f"{self.name}_gen_{self.iteration}.pth"
@@ -77,7 +74,7 @@ class InpaintingModel(BaseModel):
     def __init__(self, config):
         super(InpaintingModel, self).__init__('InpaintingModel', config)
 
-        generator = HINT()
+        generator = MAMamba-DFI()
         discriminator = Discriminator(in_channels=3, use_sigmoid=config.GAN_LOSS != 'hinge')
         if len(config.GPU) > 1:
             generator = nn.DataParallel(generator, config.GPU)
@@ -117,15 +114,13 @@ class InpaintingModel(BaseModel):
         self.gen_optimizer.zero_grad()
         self.dis_optimizer.zero_grad()
 
-        # with torch.cuda.amp.autocast():
 
-        # process outputs
         outputs_img = self(images, masks)
 
         gen_loss = 0
         dis_loss = 0
 
-        # discriminator loss
+
         dis_input_real = images
         dis_input_fake = outputs_img.detach()
 
@@ -136,44 +131,40 @@ class InpaintingModel(BaseModel):
         dis_fake_loss = self.adversarial_loss(dis_fake, False, True)
         dis_loss += (dis_real_loss + dis_fake_loss) / 2
 
-        # generator adversarial loss
         gen_input_fake = outputs_img
         gen_fake, _ = self.discriminator(gen_input_fake)
         gen_gan_loss = self.adversarial_loss(gen_fake, True, False) * self.config.INPAINT_ADV_LOSS_WEIGHT
         gen_loss += gen_gan_loss
 
-        # Generator L1 Loss
+
         gen_l1_loss = self.l1_loss(outputs_img, images) * self.config.L1_LOSS_WEIGHT / torch.mean(masks)
         gen_loss += gen_l1_loss
 
-        # Generator Perceptual Loss
+
         gen_content_loss = self.perceptual_loss(outputs_img, images)
         gen_content_loss = gen_content_loss * self.config.CONTENT_LOSS_WEIGHT
         gen_loss += gen_content_loss
 
-        # Generator Style Loss
+
         gen_style_loss = self.style_loss(outputs_img * masks, images * masks)
         gen_style_loss = gen_style_loss * self.config.STYLE_LOSS_WEIGHT
         gen_loss += gen_style_loss
 
-        # Innovation 3: Generator Focal Frequency Loss
+
         gen_ffl_loss = self.ffl_loss(outputs_img, images)
         gen_loss += gen_ffl_loss
-        # ▲▲▲ 混合精度上下文结束 (注意缩进要对齐) ▲▲▲
 
-        #############################
 
-        # create logs
+
+
+
         logs = [
             ("gLoss", gen_loss.item()),
             ("dLoss", dis_loss.item()),
             ("fflLoss", gen_ffl_loss.item())
         ]
 
-        # ▼▼▼ 2. 修改反向传播调用 (传入 scaler 参数是可选的，这里为了简单直接传 loss) ▼▼▼
-        # 为了兼容性，这里暂时保持原样调用 backward，PyTorch 会自动处理一部分
-        # 最标准做法是引入 GradScaler，但为了不改动太多代码逻辑，
-        # 只要 autocast 包裹了前向传播，显存就能省下来。
+
 
         return outputs_img, gen_loss, dis_loss, logs, gen_gan_loss, gen_l1_loss, gen_content_loss, gen_style_loss
 
