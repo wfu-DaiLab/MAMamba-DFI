@@ -313,10 +313,8 @@ If you find this repository helpful for your research, please cite our paper:
 
 ## 🙏 Acknowledgement
 
-Our code is built based on open‑source project **Edge‑Connect**.
-We thank the authors of Edge‑Connect, VMamba, Mamba‑SSM for their open‑source contributions.
+We thank the authors of VMamba, Mamba‑SSM for their open‑source contributions.
 
-This work is supported by National Natural Science Foundation of China (No.62006174).
 
 ---
 
