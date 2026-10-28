@@ -6,7 +6,7 @@ import torch
 import argparse
 from shutil import copyfile
 from src.config import Config
-from src.HINT import HINT
+from src.MAMamba-DFI import MAMamba-DFI
 import wandb
 
 def main(mode=None):
@@ -18,11 +18,11 @@ def main(mode=None):
     config = load_config(mode)
     with wandb.init(project='Rstormer', config=load_config(mode)):
 
-        # cuda visble devices
+
         os.environ['CUDA_VISIBLE_DEVICES'] = ','.join(str(e) for e in config.GPU)
 
 
-        # init device
+
         if torch.cuda.is_available():
             print('Cuda is available')
             config.DEVICE = torch.device("cuda")
@@ -33,11 +33,11 @@ def main(mode=None):
 
 
 
-        # set cv2 running threads to 1 (prevents deadlocks with pytorch dataloader)
+
         cv2.setNumThreads(0)
 
 
-        # initialize random seed
+
         torch.manual_seed(config.SEED)
         torch.cuda.manual_seed_all(config.SEED)
         np.random.seed(config.SEED)
@@ -45,18 +45,18 @@ def main(mode=None):
 
 
 
-        # build the model and initialize
-        model = HINT(config)
+
+        model = MAMamba-DFI(config)
         model.load()
 
 
-        # model training
+
         if config.MODE == 1:
             config.print()
             print('\nstart training...\n')
             model.train()
 
-        # model test
+
         elif config.MODE == 2:
             print('\nstart testing...\n')
             model.test()
@@ -72,53 +72,53 @@ def load_config(mode=None):
     """
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--path', '--checkpoints', type=str, default='/home/li/wu/sec_work/HINT_imp/train_results/MuralDH',
+    parser.add_argument('--path', '--checkpoints', type=str, default='',
                         help='model checkpoints path (default: ./checkpoints)')
 
     parser.add_argument('--model', type=int, default='2', choices=[2])
 
-    # test mode
+
     if mode == 2:
         parser.add_argument('--input', type=str,
-                            # ▼▼▼ 修改这里 ▼▼▼
-                            default='/home/li/wu/data_set/inpainting/place_1/test2_100_png',
+
+                            default='',
                             help='path to the input images directory or an input image')
 
-        # 3. 修改默认的掩码路径 (--mask)
+
         parser.add_argument('--mask', type=str,
-                            # ▼▼▼ 修改这里 ▼▼▼
-                            default='/home/li/wu/data_set/inpainting/test/place-psv_test/0-0.1_100_png',
+
+                            default='',
                             help='path to the masks directory or a mask file')
 
-        # 4. 修改默认的输出路径 (--output)
+
         parser.add_argument('--output', type=str,
-                            # ▼▼▼ 修改这里 ▼▼▼
-                            default='/home/li/wu/sec_work/HINT_imp/test_results/Place2/20260107_start/0-0.1',
+
+                            default='',
                             help='path to the output directory')
 
     args = parser.parse_args()
     config_path = os.path.join(args.path, 'config.yml')
-    # config_path = os.path.join(args.path, 'config_test.yml')
 
-    # create checkpoints path if does't exist
+
+
     if not os.path.exists(args.path):
         os.makedirs(args.path)
 
-    # copy config template if does't exist
+
     if not os.path.exists(config_path):
         copyfile('./config.yml.example', config_path)
 
-    # load config file
+
     config = Config(config_path)
     print(config_path)
 
-    # train mode
+
     if mode == 1:
         config.MODE = 1
         if args.model:
             config.MODEL = args.model
 
-    # test mode
+
     elif mode == 2:
         config.MODE = 2
         config.MODEL = args.model if args.model is not None else 3
