@@ -75,7 +75,6 @@ print(mamba_ssm.__version__)
 ```
 README.md/
 MAMamba‑DFI/
-├── README.md
 ├── train.py
 ├── test.py
 ├── main.py
