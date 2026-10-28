@@ -301,11 +301,11 @@ All ablation variants are implemented by modifying source‑code or config param
 If you find this repository helpful for your research, please cite our paper:
 
 ```
-@article{wu2026mamambadfi,
+@article{,
   title={A Mask‑Aware Mamba Framework with Dual‑Stream Interaction and Dynamic Frequency Enhancement for Image Inpainting},
-  author={Zikai Wu, Jiangyan Dai, Huihui Zhang, Qibing Qin, Shangbin Yang, Yugen Yi, Jinmei Liu},
+  author={},
   journal={},
-  year={2026}
+  year={}
 }
 ```
 
