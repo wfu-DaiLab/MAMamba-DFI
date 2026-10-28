@@ -5,7 +5,7 @@ from pdb import set_trace as stx
 import numbers
 from einops import rearrange
 
-# 尝试导入 VMamba 的核心组件
+
 try:
     from .vmamba import EfficientSS2D
 except ImportError:
@@ -19,9 +19,7 @@ except ImportError:
         def forward(self, x): return x
 
 
-# =============================================================================
-#  Partial Convolution
-# =============================================================================
+
 class PartialConv2d(nn.Conv2d):
     def __init__(self, *args, **kwargs):
         if 'multi_channel' in kwargs:
@@ -91,9 +89,7 @@ class PartialConv2d(nn.Conv2d):
             return output
 
 
-# =============================================================================
-#  HINT Base Helpers & EDFFN Dependencies
-# =============================================================================
+
 
 class BaseNetwork(nn.Module):
     def __init__(self):
@@ -127,7 +123,7 @@ def spectral_norm(module, mode=True):
     return module
 
 
-# --- Layers for EDFFN ---
+
 def to_3d(x):
     return rearrange(x, 'b c h w -> b (h w) c')
 
@@ -161,9 +157,7 @@ class LayerNorm(nn.Module):
         return to_4d(self.body(to_3d(x)), h, w)
 
 
-# =============================================================================
-#  NEW MODULE: EDFFN (Efficient Discriminative Frequency Domain-based FFN)
-# =============================================================================
+
 class EDFFN(nn.Module):
     def __init__(self, dim, ffn_expansion_factor=2.66, bias=False):
         super(EDFFN, self).__init__()
@@ -192,7 +186,7 @@ class EDFFN(nn.Module):
 
         x_padded = torch.nn.functional.pad(x, (0, w_n, 0, h_n), mode='reflect')
 
-        # FFT Operation
+
         x_patch = rearrange(x_padded, 'b c (h patch1) (w patch2) -> b c h w patch1 patch2',
                             patch1=self.patch_size, patch2=self.patch_size)
         x_patch_fft = torch.fft.rfft2(x_patch.float())
@@ -202,47 +196,44 @@ class EDFFN(nn.Module):
         x_out = rearrange(x_patch, 'b c h w patch1 patch2 -> b c (h patch1) (w patch2)',
                           patch1=self.patch_size, patch2=self.patch_size)
 
-        # Crop back to original size
+
         x_out = x_out[:, :, :h, :w]
 
         return x_out
 
 
-# =============================================================================
-#  INNOVATION 1 UPDATED: Mask-Aware Mamba + EVS Strategy
-#  Uses Geometric Transformations (Flip/Transpose) for efficient scanning
-# =============================================================================
+
 
 class MaskAwareSSM(nn.Module):
     def __init__(self, dim, layer_idx=0):
         super(MaskAwareSSM, self).__init__()
-        # EVS Strategy: Use 'layer_idx' to determine geometric transformation
+
         self.layer_idx = layer_idx
 
-        # d_state=32 based on your previous tuning
+
         self.ssm = EfficientSS2D(d_model=dim, d_state=32, ssm_ratio=2.0, d_conv=3,
                         dt_max=0.01, dt_min=0.0001, forward_type="v2")
         self.norm = LayerNorm(dim)
 
     def forward(self, x, mask):
-        # 1. Hard Gating (Mask Awareness)
+
         valid_gate = 1 - mask
         x_masked = x * valid_gate
 
-        # 2. LayerNorm
+
         x_in = self.norm(x_masked)
 
-        # 3. EVS Strategy (Geometric Transformation)
-        # Apply transformation based on layer index to simulate multi-direction scan
+
+
         if self.layer_idx % 2 == 1:
             x_in = torch.flip(x_in, dims=(-2, -1)).contiguous()
         elif self.layer_idx % 2 == 0 and self.layer_idx > 0:  # Simple alternation logic
             x_in = torch.transpose(x_in, dim0=-2, dim1=-1).contiguous()
 
-        # 4. Selective Scan
+
         out = self.ssm(x_in)
 
-        # 5. Inverse Transformation (Restore spatial structure)
+
         if self.layer_idx % 2 == 1:
             out = torch.flip(out, dims=(-2, -1)).contiguous()
         elif self.layer_idx % 2 == 0 and self.layer_idx > 0:
@@ -251,9 +242,7 @@ class MaskAwareSSM(nn.Module):
         return out
 
 
-# =============================================================================
-#  INNOVATION 2: Local MS-Block (Local Stream)
-# =============================================================================
+
 
 class MSBlockLayer(nn.Module):
     def __init__(self, in_channels, out_channels, kernel_size, expansion=2.0):
@@ -291,24 +280,22 @@ class LocalMSBlock(nn.Module):
             nn.SiLU(inplace=True)
         )
 
-        # 计算通道分配
+
         c1 = dim // 3
         c2 = dim // 3
         c3 = dim - c1 - c2
         self.split_sections = [c1, c2, c3]
 
-        # 定义分支
+
         self.branch1 = MSBlockLayer(c1, c1, kernel_size=3)
         self.branch2 = MSBlockLayer(c2, c2, kernel_size=5)
         self.branch3 = MSBlockLayer(c3, c3, kernel_size=7)
 
-        # ▼▼▼ 新增：通道对齐层 (适配 dim 不能被 3 整除的情况) ▼▼▼
-        # 如果 c1 != c2，需要对齐 y1 到 x2
+
         self.align_1_to_2 = nn.Conv2d(c1, c2, 1, bias=False) if c1 != c2 else nn.Identity()
 
-        # 如果 c2 != c3，需要对齐 y2 到 x3
         self.align_2_to_3 = nn.Conv2d(c2, c3, 1, bias=False) if c2 != c3 else nn.Identity()
-        # ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
+
 
         self.out_conv = nn.Conv2d(dim, dim * 2, 1)
         self.norm = nn.InstanceNorm2d(dim * 2, affine=True)
@@ -323,13 +310,13 @@ class LocalMSBlock(nn.Module):
 
         y1 = self.branch1(x1)
 
-        # ▼▼▼ 修改：使用对齐层 ▼▼▼
+
         y1_aligned = self.align_1_to_2(y1)
         y2 = self.branch2(x2 + y1_aligned)
 
         y2_aligned = self.align_2_to_3(y2)
         y3 = self.branch3(x3 + y2_aligned)
-        # ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
+
 
         y = torch.cat([y1, y2, y3], dim=1)
         out = self.out_conv(y)
@@ -339,9 +326,7 @@ class LocalMSBlock(nn.Module):
         return x + (self.act(feat) * torch.sigmoid(gate))
 
 
-# =============================================================================
-#  INNOVATION 2: Bi-Interaction Unit (Cross-Gating)
-# =============================================================================
+
 
 class BiInteractionUnit(nn.Module):
     def __init__(self, dim):
@@ -362,49 +347,45 @@ class BiInteractionUnit(nn.Module):
         return out
 
 
-# =============================================================================
-#  Dual-Stream Block (Integrated with EVS & EDFFN)
-# =============================================================================
+
 
 class DualStreamBlock(nn.Module):
     def __init__(self, dim, layer_idx=0):
         super(DualStreamBlock, self).__init__()
 
-        # Global Branch (EVS strategy via layer_idx)
+
         self.global_branch = MaskAwareSSM(dim, layer_idx=layer_idx)
 
-        # Local Branch
+
         self.local_branch = LocalMSBlock(dim)
 
-        # Interaction
+
         self.interaction = BiInteractionUnit(dim)
 
-        # New: EDFFN for frequency enhancement & FFN capability
+
         self.edffn = EDFFN(dim)
         self.norm_ffn = LayerNorm(dim)
 
         self.gamma = nn.Parameter(torch.zeros(1))
 
     def forward(self, x, mask):
-        # 1. Dual Stream Processing
+
         feat_global = self.global_branch(x, mask)
         feat_local = self.local_branch(x, mask)
 
-        # 2. Interaction
+
         feat_fused = self.interaction(feat_global, feat_local)
 
-        # 3. Residual Connection 1 (Mix)
+
         x = x + self.gamma * feat_fused
 
-        # 4. EDFFN (Post-interaction Frequency Enhancement)
+
         x = x + self.edffn(self.norm_ffn(x))
 
         return x
 
 
-# =============================================================================
-#  Other Layers
-# =============================================================================
+
 
 class GatedEmb(nn.Module):
     def __init__(self, in_c=3, embed_dim=48, bias=False):
@@ -525,11 +506,9 @@ class Discriminator(BaseNetwork):
         return outputs, [conv1, conv2, conv3, conv4, conv5]
 
 
-# =============================================================================
-#  HINT Model (Main Generator)
-# =============================================================================
 
-class HINT(nn.Module):
+
+class MAMamba-DFI(nn.Module):
     def __init__(self,
                  inp_channels=4,
                  out_channels=3,
@@ -540,18 +519,12 @@ class HINT(nn.Module):
                  bias=False,
                  LayerNorm_type='WithBias',
                  ):
-        super(HINT, self).__init__()
+        super(MAMamba-DFI, self).__init__()
 
         self.patch_embed = GatedEmb(inp_channels, dim)
 
-        # ---------------------------------------------------------------------
-        # Integrated:
-        # 1. EVS Strategy (passing layer_idx via curr_idx counter)
-        # 2. EDFFN (inside DualStreamBlock)
-        # 3. MaskAwareSDPDownsample
-        # ---------------------------------------------------------------------
 
-        # Level 1
+
         curr_idx = 0
         self.encoder_level1 = nn.ModuleList()
         for i in range(num_blocks[0]):
@@ -560,7 +533,6 @@ class HINT(nn.Module):
 
         self.down1_2 = MaskAwareSDPDownsample(dim)
 
-        # Level 2
         self.encoder_level2 = nn.ModuleList()
         for i in range(num_blocks[1]):
             self.encoder_level2.append(DualStreamBlock(dim=int(dim * 2 ** 1), layer_idx=curr_idx))
@@ -568,7 +540,6 @@ class HINT(nn.Module):
 
         self.down2_3 = MaskAwareSDPDownsample(int(dim * 2 ** 1))
 
-        # Level 3
         self.encoder_level3 = nn.ModuleList()
         for i in range(num_blocks[2]):
             self.encoder_level3.append(DualStreamBlock(dim=int(dim * 2 ** 2), layer_idx=curr_idx))
@@ -576,17 +547,17 @@ class HINT(nn.Module):
 
         self.down3_4 = MaskAwareSDPDownsample(int(dim * 2 ** 2))
 
-        # Level 4 (Latent)
+
         self.latent = nn.ModuleList()
         for i in range(num_blocks[3]):
             self.latent.append(DualStreamBlock(dim=int(dim * 2 ** 3), layer_idx=curr_idx))
             curr_idx += 1
 
-        # Decoder Path
+
         self.up4_3 = Upsample(int(dim * 2 ** 3))
         self.reduce_chan_level3 = nn.Conv2d(int(dim * 2 ** 3), int(dim * 2 ** 2), kernel_size=1, bias=bias)
 
-        # Decoder Level 3
+
         self.decoder_level3 = nn.ModuleList()
         for i in range(num_blocks[2]):
             # Decoder continues the indexing or can reset?
@@ -597,7 +568,7 @@ class HINT(nn.Module):
         self.up3_2 = Upsample(int(dim * 2 ** 2))
         self.reduce_chan_level2 = nn.Conv2d(int(dim * 2 ** 2), int(dim * 2 ** 1), kernel_size=1, bias=bias)
 
-        # Decoder Level 2
+
         self.decoder_level2 = nn.ModuleList()
         for i in range(num_blocks[1]):
             self.decoder_level2.append(DualStreamBlock(dim=int(dim * 2 ** 1), layer_idx=curr_idx))
@@ -605,7 +576,7 @@ class HINT(nn.Module):
 
         self.up2_1 = Upsample(int(dim * 2 ** 1))
 
-        # Decoder Level 1
+
         self.decoder_level1 = nn.ModuleList()
         for i in range(num_blocks[0]):
             self.decoder_level1.append(DualStreamBlock(dim=int(dim * 2 ** 1), layer_idx=curr_idx))
