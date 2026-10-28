@@ -229,7 +229,6 @@ Test mode will:
 1. Read test image and mask flist from config.
 2. Run model evaluation (`model.eval()`, `torch.no_grad()`).
 3. Output three kinds of images: masked input, raw network output, merged result(original known region + inpainted hole).
-4. Automatically compute **PSNR, SSIM, L1, LPIPS** for every test sample and print mean metrics on terminal.
 
 Output directory:
 
