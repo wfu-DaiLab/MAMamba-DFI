@@ -232,7 +232,7 @@ class FocalFrequencyLoss(nn.Module):
         self.log_matrix = log_matrix
         self.batch_matrix = batch_matrix
         self.use_hpf = use_hpf
-        self.hpf_cutoff = hpf_cutoff  # 屏蔽低频的半径大小
+        self.hpf_cutoff = hpf_cutoff  
 
     def filter_high_pass(self, freq):
         # freq shape: [..., H, W, 2]
@@ -276,17 +276,12 @@ class FocalFrequencyLoss(nn.Module):
         # perform 2D DFT (real-to-complex, orthonormalization)
         if IS_HIGH_VERSION:
             freq = torch.fft.fft2(y, norm='ortho')
-            # 此时 freq 是 ComplexFloat，形状 [N, P, C, H, W] (如果是 patch based)
-            # 或者 [N, C, H, W] (如果 patch_factor=1)
 
-            # 将实部虚部堆叠到最后一维: [..., H, W, 2]
             freq = torch.stack([freq.real, freq.imag], -1)
         else:
             freq = torch.rfft(y, 2, onesided=False, normalized=True)
 
-        # Innovation: Apply High Pass Filter if enabled
-        # 现在 freq 肯定是 5 维 (如果patch=1) 或者 6 维
-        # 为了通用性，我们只处理最后 3 维 [H, W, 2]
+
         if self.use_hpf:
             freq = self.filter_high_pass(freq)
 
@@ -320,11 +315,11 @@ class FocalFrequencyLoss(nn.Module):
                 'The values of spectrum weight matrix should be in the range [0, 1], '
                 'but got Min: %.10f Max: %.10f' % (weight_matrix.min().item(), weight_matrix.max().item()))
 
-        # frequency distance using (squared) Euclidean distance
+
         tmp = (recon_freq - real_freq) ** 2
         freq_distance = tmp[..., 0] + tmp[..., 1]
 
-        # dynamic spectrum weighting (Hadamard product)
+
         loss = weight_matrix * freq_distance
         return torch.mean(loss)
 
