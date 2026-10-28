@@ -5,7 +5,7 @@ import math
 from functools import partial
 from einops import rearrange, repeat
 
-# 尝试导入官方 mamba_ssm
+
 try:
     from mamba_ssm import Mamba
     from mamba_ssm.ops.selective_scan_interface import selective_scan_fn, mamba_inner_fn
@@ -37,10 +37,7 @@ class LayerNorm(nn.Module):
             return x
 
 
-# ==========================================================
-# EfficientSS2D: 单向扫描核心 (提速神器)
-# Implements Single-Direction Selective Scan for EVS Strategy
-# ==========================================================
+
 class EfficientSS2D(nn.Module):
     def __init__(
             self,
@@ -70,10 +67,10 @@ class EfficientSS2D(nn.Module):
         self.d_inner = int(self.expand * self.d_model)
         self.dt_rank = math.ceil(self.d_model / 16) if dt_rank == "auto" else dt_rank
 
-        # 输入投影
+
         self.in_proj = nn.Linear(self.d_model, self.d_inner * 2, bias=bias, **factory_kwargs)
 
-        # 2D 深度卷积 (Depthwise Conv)
+
         self.conv2d = nn.Conv2d(
             in_channels=self.d_inner,
             out_channels=self.d_inner,
@@ -85,15 +82,14 @@ class EfficientSS2D(nn.Module):
         )
         self.act = nn.SiLU()
 
-        # ▼▼▼ 关键修改：只初始化 1 组参数 (原本是 4 组) ▼▼▼
-        # SSM 参数投影 (x -> dt, B, C)
+
         self.x_proj = nn.Linear(self.d_inner, (self.dt_rank + self.d_state * 2), bias=False, **factory_kwargs)
 
-        # dt 投影 (x -> dt)
+
         self.dt_proj = self.dt_init(self.dt_rank, self.d_inner, dt_scale, dt_init, dt_min, dt_max, dt_init_floor,
                                     **factory_kwargs)
 
-        # A 和 D 也只需要 1 份拷贝
+
         self.A_log = self.A_log_init(self.d_state, self.d_inner, copies=1, merge=True)
         self.D = self.D_init(self.d_inner, copies=1, merge=True)
         # ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
@@ -142,27 +138,23 @@ class EfficientSS2D(nn.Module):
         x = x.permute(0, 2, 3, 1)
         B, H, W, C = x.shape
 
-        # Linear Projection + Chunk -> x (Content), z (Gate)
+
         xz = self.in_proj(x)
         x, z = xz.chunk(2, dim=-1)
 
-        # Depthwise Conv
+
         x = x.permute(0, 3, 1, 2).contiguous()  # [B, D_inner, H, W]
         x = self.act(self.conv2d(x))
 
-        # ▼▼▼ 关键修改：只做单向扫描，不做 4 向展开 ▼▼▼
-        # 1. Flatten to [B, L, D] (Sequence Length L = H*W)
-        # Note: The input x here has already been geometrically transformed (flipped/transposed)
-        # in `networks.py`, so we just scan it as a 1D sequence.
+
         y = x.view(B, self.d_inner, H * W).transpose(1, 2)  # [B, L, D]
 
-        # 2. Generate Parameters (Delta, B, C)
+
         x_dbl = self.x_proj(y)  # [B, L, rank+2*state]
         dts, Bs, Cs = torch.split(x_dbl, [self.dt_rank, self.d_state, self.d_state], dim=-1)
         dts = self.dt_proj(dts)  # [B, L, D]
 
-        # 3. Reshape for selective_scan_fn
-        # fn requires: [B, D, L], [B, D, L], [B, N, L] ...
+
         xs = y.transpose(1, 2).float().contiguous()  # [B, D, L]
         dts = dts.transpose(1, 2).float().contiguous()
         Bs = Bs.transpose(1, 2).float().contiguous()
@@ -172,7 +164,7 @@ class EfficientSS2D(nn.Module):
         As = -torch.exp(self.A_log.float())
         dt_projs_bias = self.dt_proj.bias.float()
 
-        # 4. Execute Single-Direction Selective Scan
+
         out_y = selective_scan_fn(
             xs, dts,
             As, Bs, Cs, Ds,
@@ -182,29 +174,24 @@ class EfficientSS2D(nn.Module):
             return_last_state=False
         )  # Output: [B, D, L]
 
-        # 5. Restore Shape: [B, D, L] -> [B, H, W, D]
-        # (Transposed back to channels-last for LayerNorm)
-        y = out_y.transpose(1, 2).view(B, H, W, self.d_inner)
-        # ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
 
-        # Norm & Gating
+        y = out_y.transpose(1, 2).view(B, H, W, self.d_inner)
+
+
+
         y = self.out_norm(y)
         y = y * F.silu(z)  # Gating with z branch
 
-        # Output Projection
+
         out = self.out_proj(y)
         if self.dropout is not None:
             out = self.dropout(out)
 
-        # Restore to [B, C, H, W]
+
         return out.permute(0, 3, 1, 2)
 
 
-# ==========================================================
-# Legacy SS2D: 4-Direction Scan (Retained for compatibility)
-# ==========================================================
-# This class is kept just in case you want to switch back to full VMamba mode.
-# But networks.py will now import EfficientSS2D by default.
+
 class SS2D(nn.Module):
     def __init__(
             self,
@@ -351,9 +338,7 @@ class VSSBlock(nn.Module):
                  mlp_ratio=4.0, mlp_act_layer=nn.GELU, mlp_drop_rate: float = 0.0, gmlp=False,
                  use_checkpoint: bool = False, **kwargs):
         super().__init__()
-        # VSSBlock 保留作为接口，默认使用 EfficientSS2D (如果通过参数控制)
-        # 但在你的 DualStreamBlock 中，你是直接调用的 SS2D 或 EfficientSS2D，所以这个类其实可能用不到
-        # 这里为了完整性保留
+
         self.norm = norm_layer(hidden_dim)
         self.op = EfficientSS2D(  # 默认改为 Efficient
             d_model=hidden_dim, d_state=ssm_d_state, ssm_ratio=ssm_ratio, dt_rank=ssm_dt_rank,
