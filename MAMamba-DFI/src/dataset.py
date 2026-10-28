@@ -111,16 +111,16 @@ class Dataset(torch.utils.data.Dataset):
 
         # external
         if mask_type == 3:
-            # ▼▼▼▼▼▼▼▼▼▼ 修改部分开始 ▼▼▼▼▼▼▼▼▼▼
+           
             if self.training:
-                # 【训练模式】：随机抽取，增强数据多样性
+                
                 mask_index = random.randint(0, len(self.mask_data) - 1)
             else:
-                # 【测试模式】：强制顺序对应
-                # 无论文件名叫什么，图片列表的第 i 张，就去取掩码列表的第 i 张
-                # 使用 % 取余数是为了防止 图片数量 > 掩码数量 时报错
+                
+                
+                
                 mask_index = index % len(self.mask_data)
-            # ▲▲▲▲▲▲▲▲▲▲ 修改部分结束 ▲▲▲▲▲▲▲▲▲▲
+            
 
             mask = imread(self.mask_data[mask_index])
             mask = self.resize(mask, imgh, imgw)
@@ -128,7 +128,7 @@ class Dataset(torch.utils.data.Dataset):
             mask = (mask > 0).astype(np.uint8) * 255
             return mask
 
-        # test mode: load mask non random
+        
         if mask_type == 6:
             mask = imread(self.mask_data[index%len(self.mask_data)])
             mask = self.resize(mask, imgh, imgw, centerCrop=False)
@@ -148,13 +148,13 @@ class Dataset(torch.utils.data.Dataset):
         imgh, imgw = img.shape[0:2]
 
         if centerCrop and imgh != imgw:
-            # center crop
+            
             side = np.minimum(imgh, imgw)
             j = (imgh - side) // 2
             i = (imgw - side) // 2
             img = img[j:j + side, i:i + side, ...]
 
-        # img = scipy.misc.imresize(img, [height, width])
+        
         img = np.array(Image.fromarray(img).resize((height, width)))
         return img
 
@@ -162,7 +162,7 @@ class Dataset(torch.utils.data.Dataset):
         if isinstance(flist, list):
             return flist
 
-        # flist: image file path, image directory path, text file flist path
+        
         if isinstance(flist, str):
             if os.path.isdir(flist):
                 flist = list(glob.glob(flist + '/*.jpg')) + list(glob.glob(flist + '/*.png'))
