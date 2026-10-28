@@ -73,6 +73,7 @@ print(mamba_ssm.__version__)
 ## 📂 Project Structure
 
 ```
+README.md/
 MAMamba‑DFI/
 ├── README.md
 ├── train.py
