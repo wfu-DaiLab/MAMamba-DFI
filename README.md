@@ -263,12 +263,12 @@ Implemented metrics:
 
 ### Tables
 
-1. **Table2 (d_state ablation)**: modify `vmamba.py EfficientSS2D d_state` argument (16 / 32 /64), retrain on Places2 fixed test set.
-2. **Table3 (MDI block number ablation)**: modify `networks.py MAMamba‑DFI num_blocks=[...]`, retrain on Places2.
-3. **Table4‑7 (main comparison across four datasets)**: use corresponding dataset flist, run test script, group metrics by mask ratio bins.
-4. **Table8 (LPIPS & FID)**: LPIPS is printed by test code; compute FID by third‑party FID tool using test result folder and gt folder under mask interval (0.3,0.4].
-5. **Table9 (additional mamba‑based baseline comparison)**: For DESSM run official released code under identical training/test protocol; for HSCM / InpaintingMamba / DABMambaII report original paper numbers as described in our manuscript.
-6. **Table10‑11 (ablation on Dunhuang)**: turn on/off modules in code:
+1. **(d_state ablation)**: modify `vmamba.py EfficientSS2D d_state` argument (16 / 32 /64), retrain on Places2 fixed test set.
+2. **(MDI block number ablation)**: modify `networks.py MAMamba‑DFI num_blocks=[...]`, retrain on Places2.
+3. **T(main comparison across four datasets)**: use corresponding dataset flist, run test script, group metrics by mask ratio bins.
+4. **(LPIPS & FID)**: LPIPS is printed by test code; compute FID by third‑party FID tool using test result folder and gt folder under mask interval (0.3,0.4].
+5. **(additional mamba‑based baseline comparison)**: For DESSM run official released code under identical training/test protocol; for HSCM / InpaintingMamba / DABMambaII report original paper numbers as described in our manuscript.
+6. **(ablation on Dunhuang)**: turn on/off modules in code:
    - w/ ConvDown: replace `MaskAwareSDPDownsample` with ordinary `nn.Conv2d(stride=2)`
    - w/o DHFL: set `FFL_LOSS_WEIGHT:0.0` in config.yml
    - w/o Local / w/o Global: comment corresponding branch inside `DualStreamBlock`
