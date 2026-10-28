@@ -21,10 +21,8 @@ Extensive experiments on Places2, Paris Street View, CelebA‑HQ, Dunhuang Grott
 - [Metrics Evaluation](#%E2%80%91metrics%E2%80%91evaluation)
 - [Reproduce Paper Tables & Figures](#%E2%80%91reproduce%E2%80%91paper%E2%80%91tables--figures)
 - [Ablation Study](#%E2%80%91ablation%E2%80%91study)
-- [Pretrained Checkpoints](#%E2%80%91pretrained%E2%80%91checkpoints)
 - [Citation](#%E2%80%91citation)
 - [Acknowledgement](#%E2%80%91acknowledgement)
-- [License](#%E2%80%91license)
 
 ---
 
@@ -77,25 +75,22 @@ print(mamba_ssm.__version__)
 ```
 MAMamba‑DFI/
 ├── README.md
-├── LICENSE
-├── requirements.txt
 ├── train.py
 ├── test.py
 ├── main.py
 ├── config.yml.example         # example config template
 ├── src/
 │   ├── __init__.py
-│   ├── config.py               # config parser
-│   ├── metrics.py              # PSNR implementation
-│   ├── loss.py                 # Adversarial / Perceptual / Style / FocalFrequencyLoss(DHFL)
-│   ├── models.py               # BaseModel & InpaintingModel training loop
-│   ├── networks.py             # MDI / MAD / FDEFN / Discriminator network definition
-│   ├── vmamba.py               # EfficientSS2D SSM core implementation
-│   ├── dataset.py              # Dataset & mask generation
-│   ├── utils.py                # mask creation, stitch image, progbar etc.
-│   ├── flist.py                # generate image path list(.flist)
-├── 20260823‑英文.docx          # full paper manuscript
-└── checkpoints/                # auto‑generated for weights, samples, logs
+│   ├── config.py               
+│   ├── metrics.py              
+│   ├── loss.py                 
+│   ├── models.py               
+│   ├── networks.py             
+│   ├── vmamba.py               
+│   ├── dataset.py              
+│   ├── utils.py                
+│   ├── flist.py                
+└── checkpoints/                
 ```
 
 > 
@@ -160,13 +155,13 @@ cp config.yml.example ./checkpoints/exp_places2/config.yml
 Key hyper‑parameters from paper (default in `config.yml.example`):
 
 ```
-MODE: 1                    # 1: train, 2: test
+MODE: 1                    
 MODEL: 2
 MASK: 3
 GPU: [0]
 INPUT_SIZE: 256
 BATCH_SIZE: 2
-LR: 0.00005                # 5e‑5
+LR: 0.00005                
 D2G_LR: 0.2
 BETA1: 0.5
 BETA2: 0.999
@@ -177,7 +172,7 @@ L1_LOSS_WEIGHT: 1
 STYLE_LOSS_WEIGHT: 250
 CONTENT_LOSS_WEIGHT: 0.1
 INPAINT_ADV_LOSS_WEIGHT: 0.01
-FFL_LOSS_WEIGHT: 0.1       # DHFL loss weight λ_dhfl
+FFL_LOSS_WEIGHT: 0.1       
 GAN_LOSS: lsgan
 
 SAVE_INTERVAL: 1000
@@ -215,7 +210,7 @@ Training workflow:
 3. `backward()` update discriminator and generator, gradient clipping max_norm=1.0.
 4. Save weights:
    - latest weight: `InpaintingModel_gen.pth`, `InpaintingModel_dis.pth`
-   - history checkpoint every 760 iterations: `InpaintingModel_gen_xxxx.pth`
+   - history checkpoint every xxxx iterations: `InpaintingModel_gen_xxxx.pth`
 5. Log training loss, psnr, mae to log file and wandb. Intermediate visual samples saved under `checkpoints/exp_places2/results/inpaint/`.
 
 > 
@@ -234,7 +229,7 @@ Test mode will:
 1. Read test image and mask flist from config.
 2. Run model evaluation (`model.eval()`, `torch.no_grad()`).
 3. Output three kinds of images: masked input, raw network output, merged result(original known region + inpainted hole).
-4. Automatically compute **PSNR, SSIM, L1, LPIPS** for every test sample and print mean metrics on terminal, corresponding to Table4‑7 in paper.
+4. Automatically compute **PSNR, SSIM, L1, LPIPS** for every test sample and print mean metrics on terminal.
 
 Output directory:
 
@@ -261,7 +256,6 @@ Implemented metrics:
 5. **FID**: you can compute FID between ground‑truth folder and result folder by external tool.
 
 > 
-> The metrics printed during test exactly reproduce Table 4‑7 (mask‑ratio grouped quantitative results). To reproduce group statistics per mask interval, you need to pre‑split your test set into six mask‑ratio bins `(0.01,0.1], (0.1,0.2], ... ,(0.5,0.6]` as described in paper.
 
 ---
 
@@ -286,46 +280,21 @@ Implemented metrics:
 
 ### Figures
 
-1. **Fig.1 / Fig.10 qualitative comparison**: collect test joint images from `joint4060` folder, crop and arrange sub‑plots as in manuscript.
-2. **Fig.2‑5 architecture diagram**: these are vector schematic diagrams drawn manually in paper, not generated from code.
-3. **Fig.6‑9 curve plots**: take test grouped metrics data (Table4‑7 numbers), draw line chart with matplotlib.
-4. **Fig.11 ablation visual comparison**: collect test outputs from each ablation variant checkpoint.
+1. **Qualitative comparison**: collect test joint images from `joint4060` folder, crop and arrange sub‑plots as in manuscript.
+2. **Architecture diagram**: these are vector schematic diagrams drawn manually in paper, not generated from code.
+3. **Curve plots**: take test grouped metrics data (Table4‑7 numbers), draw line chart with matplotlib.
+4. **Ablation visual comparison**: collect test outputs from each ablation variant checkpoint.
 
-> 
-> ⚠ Important note: Due to random seed, GPU non‑determinism, absolute numbers may have tiny fluctuation (±0.05dB PSNR), but relative comparison and conclusion stay consistent. We set seed in code (`SEED:10` in config), but cudnn benchmark=True will bring minor nondeterminism. For fully deterministic run you can add:
 
-```
-torch.backends.cudnn.benchmark=False
-torch.use_deterministic_algorithms(True)
-```
-
-in `main.py`, which may slow down training speed.
 
 ---
 
 ## 🧪 Ablation Study
 
-All ablation variants are implemented by modifying source‑code or config parameters, see above section. All ablation experiments in paper are performed on **Dunhuang Grottoes dataset**.
+All ablation variants are implemented by modifying source‑code or config parameters, see above section. All ablation experiments in paper are performed on **Dunhuang Grottoes dataset** and **Paris Street View**.
 
 ---
 
-## 💾 Pretrained Checkpoints
-
-> 
-> We will upload pretrained weights for Places2 / Paris Street View / CelebA‑HQ / Dunhuang Grottoes to GitHub release after acceptance.
-
-Once available, download weights and put under corresponding checkpoint folder:
-
-```
-checkpoints/exp_places2/
-├── config.yml
-├── InpaintingModel_gen.pth
-└── InpaintingModel_dis.pth
-```
-
-Then run test.py directly for evaluation.
-
----
 
 ## 📝 Citation
 
@@ -351,55 +320,6 @@ This work is supported by National Natural Science Foundation of China (No.62006
 
 ---
 
-## 📜 License
-
-This project is released under MIT License. See LICENSE file for details.
-
----
-
-## ❓ FAQ & Troubleshooting
-
-1. **mamba‑ssm install error**: make sure your environment has working CUDA toolkit matching pytorch cuda version, gcc/g++ >=9.
-2. **CUDA out‑of‑memory**: decrease `BATCH_SIZE` in config.yml, or use smaller input resolution. Default batch size is 2 for 256×256 on RTX4090.
-3. **NaN loss**: check learning rate, loss weight values; verify image/mask normalization range (image [0‑1], mask 0/1 float tensor).
-4. **Reproduce metrics slight difference**: GPU computation non‑determinism is normal, please run multiple runs and average.
-5. Key paper hyper‑parameters are fixed inside code, please do not arbitrarily modify config weights without referring to manuscript section 3.4.
-
-> 
-> If you meet any problem for reproducing tables and figures, feel free to open an issue on GitHub, we will respond promptly.
-
----
 
 
 
-1. `requirements.txt`
-
-```
-torch==2.2.0
-torchvision==0.17.0
-mamba-ssm==2.0.4
-einops
-opencv-python
-pillow
-numpy
-scipy
-scikit-image
-pyyaml
-lpips
-wandb
-```
-
-2. `config.yml.example` 就是你仓库里的模板配置文件。
-3. `.gitignore`
-
-```
-__pycache__
-*.pyc
-checkpoints/*
-!checkpoints/.gitkeep
-*.pth
-*.flist
-*.log
-*.png
-*.jpg
-```
